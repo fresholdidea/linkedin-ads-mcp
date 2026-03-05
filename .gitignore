@@ -13,6 +13,7 @@ tokens.json
 
 # Generated files (may contain sensitive account data)
 dashboard.html
+deploy/
 
 # Claude Code settings
 .claude/

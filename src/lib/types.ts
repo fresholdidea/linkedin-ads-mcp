@@ -332,3 +332,125 @@ export interface GetDailyTrendsInput {
   metrics?: string[];
   entityLevel?: 'ACCOUNT' | 'CAMPAIGN_GROUP' | 'CAMPAIGN';
 }
+
+// Write Tool Input Types
+
+export interface CreateCampaignGroupInput {
+  accountId: string;
+  name: string;
+  status?: 'ACTIVE' | 'DRAFT';
+  startDate: string;
+  endDate?: string;
+  totalBudgetAmount?: string;
+  totalBudgetCurrency?: string;
+  dailyBudgetAmount?: string;
+  dailyBudgetCurrency?: string;
+  objectiveType?: string;
+}
+
+export interface UpdateCampaignGroupInput {
+  accountId: string;
+  campaignGroupId: string;
+  name?: string;
+  status?: 'ACTIVE' | 'PAUSED' | 'ARCHIVED' | 'DRAFT';
+  totalBudgetAmount?: string;
+  totalBudgetCurrency?: string;
+  endDate?: number;
+}
+
+export interface CreateCampaignInput {
+  accountId: string;
+  name: string;
+  campaignGroupId: string;
+  objectiveType: string;
+  type?: string;
+  costType?: string;
+  status?: 'ACTIVE' | 'DRAFT';
+  dailyBudgetAmount: string;
+  dailyBudgetCurrency?: string;
+  totalBudgetAmount?: string;
+  totalBudgetCurrency?: string;
+  unitCostAmount: string;
+  unitCostCurrency?: string;
+  localeCountry?: string;
+  localeLanguage?: string;
+  startDate?: string;
+  endDate?: string;
+  targetingCriteria: unknown;
+  offsiteDeliveryEnabled?: boolean;
+  audienceExpansionEnabled?: boolean;
+  creativeSelection?: string;
+  politicalIntent?: string;
+}
+
+export interface UpdateCampaignInput {
+  accountId: string;
+  campaignId: string;
+  name?: string;
+  status?: 'ACTIVE' | 'PAUSED' | 'ARCHIVED' | 'DRAFT';
+  dailyBudgetAmount?: string;
+  dailyBudgetCurrency?: string;
+  totalBudgetAmount?: string;
+  totalBudgetCurrency?: string;
+  unitCostAmount?: string;
+  unitCostCurrency?: string;
+  endDate?: number;
+  targetingCriteria?: unknown;
+  offsiteDeliveryEnabled?: boolean;
+  audienceExpansionEnabled?: boolean;
+  optimizationTargetType?: string;
+}
+
+export interface UpdateCreativeStatusInput {
+  accountId: string;
+  creativeId: string;
+  intendedStatus: 'ACTIVE' | 'PAUSED' | 'ARCHIVED';
+}
+
+export interface CreateCreativeInput {
+  accountId: string;
+  campaignId: string;
+  contentReference?: string;
+  intendedStatus?: 'ACTIVE' | 'DRAFT';
+  name?: string;
+  leadgenFormId?: string;
+  leadgenCallToActionLabel?: string;
+}
+
+export interface CreateInlineAdInput {
+  accountId: string;
+  campaignId: string;
+  organizationId: string;
+  commentary: string;
+  mediaId?: string;
+  mediaTitle?: string;
+  landingPageUrl?: string;
+  callToActionLabel?: string;
+  intendedStatus?: 'ACTIVE' | 'DRAFT';
+  name?: string;
+  leadgenFormId?: string;
+  leadgenCallToActionLabel?: string;
+}
+
+export interface DeleteCampaignInput {
+  accountId: string;
+  campaignId: string;
+}
+
+export interface DeleteCampaignGroupInput {
+  accountId: string;
+  campaignGroupId: string;
+}
+
+export interface ListCampaignsInput {
+  accountId: string;
+  campaignGroupIds?: string[];
+  status?: Array<'ACTIVE' | 'PAUSED' | 'ARCHIVED' | 'DRAFT' | 'CANCELED'>;
+}
+
+export interface UploadImageInput {
+  organizationId: string;
+  filePath: string;
+  accountId?: string;
+  assetName?: string;
+}

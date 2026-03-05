@@ -300,8 +300,13 @@ async function generateDashboard() {
 
   console.log(`Date range: ${startDateStr} to ${endDateStr}\n`);
 
-  const accountId = '${LINKEDIN_ADS_ACCOUNT_ID}';
-  const accountName = '${LINKEDIN_ADS_ACCOUNT_NAME}';
+  const accountId = process.env.LINKEDIN_ADS_ACCOUNT_ID;
+  const accountName = process.env.LINKEDIN_ADS_ACCOUNT_NAME || 'LinkedIn Ads';
+  if (!accountId) {
+    console.error('Error: LINKEDIN_ADS_ACCOUNT_ID environment variable is required');
+    console.error('Usage: LINKEDIN_ADS_ACCOUNT_ID=123456 LINKEDIN_ADS_ACCOUNT_NAME="My Account" npx tsx src/scripts/generate-dashboard.ts');
+    process.exit(1);
+  }
   console.log(`Using account: ${accountName} (${accountId})\n`);
 
   // 1. Get campaign performance
@@ -419,7 +424,7 @@ async function generateDashboard() {
 
   // Fetch creative content from posts
   console.log('Fetching creative content from posts...');
-  const creativeContentMap = new Map<string, { imageUrl: string; headline: string; primaryText: string; landingPageUrl: string; contentType: string }>();
+  const creativeContentMap = new Map<string, { imageUrl: string; headline: string; primaryText: string; landingPageUrl: string; contentType: string; carouselImages: string[] }>();
   const creativesToFetch = Array.from(creativeDetailsMap.entries());
   const batchSize = 5;
 
@@ -464,6 +469,7 @@ async function generateDashboard() {
     const headline = resolvedContent?.headline || creativeDetails?.name || '';
     const primaryText = resolvedContent?.primaryText || '';
     const landingPageUrl = resolvedContent?.landingPageUrl || '';
+    const carouselImages = resolvedContent?.carouselImages || [];
 
     let contentType = resolvedContent?.contentType || 'UNKNOWN';
     // Override: if we have video views but type isn't VIDEO, make it VIDEO
@@ -486,6 +492,7 @@ async function generateDashboard() {
       status,
       type: contentType,
       imageUrl,
+      carouselImages,
       headline,
       primaryText,
       landingPageUrl,
@@ -768,6 +775,16 @@ function generateHTML(
     .modal-metric { text-align: center; padding: 8px; }
     .modal-metric .value { font-size: 18px; font-weight: 700; color: #0077b5; }
     .modal-metric .label { font-size: 10px; color: #6b7280; text-transform: uppercase; margin-top: 4px; }
+    .carousel-gallery { position: relative; background: #f3f4f6; overflow: hidden; }
+    .carousel-track { display: flex; transition: transform 0.3s ease; }
+    .carousel-track img { width: 100%; max-height: 400px; object-fit: contain; flex-shrink: 0; background: #f3f4f6; }
+    .carousel-btn { position: absolute; top: 50%; transform: translateY(-50%); background: rgba(255,255,255,0.9); border: none; width: 40px; height: 40px; border-radius: 50%; cursor: pointer; font-size: 20px; color: #374151; box-shadow: 0 2px 8px rgba(0,0,0,0.15); z-index: 5; display: flex; align-items: center; justify-content: center; }
+    .carousel-btn:hover { background: white; }
+    .carousel-btn.prev { left: 12px; }
+    .carousel-btn.next { right: 12px; }
+    .carousel-dots { display: flex; justify-content: center; gap: 6px; padding: 12px; background: #f3f4f6; }
+    .carousel-dot { width: 8px; height: 8px; border-radius: 50%; background: #d1d5db; border: none; cursor: pointer; padding: 0; }
+    .carousel-dot.active { background: #0077b5; }
 
     /* Demographics */
     .demo-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(500px, 1fr)); gap: 24px; }
@@ -1409,8 +1426,21 @@ function generateHTML(
       const modal = document.getElementById('creativeModal');
       const content = document.getElementById('modalContent');
 
+      const carouselHtml = c.carouselImages && c.carouselImages.length > 1
+        ? \`<div class="carousel-gallery">
+            <div class="carousel-track" id="carouselTrack">
+              \${c.carouselImages.map(url => \`<img src="\${url}" alt="">\`).join('')}
+            </div>
+            <button class="carousel-btn prev" onclick="moveCarousel(-1)">&#8249;</button>
+            <button class="carousel-btn next" onclick="moveCarousel(1)">&#8250;</button>
+            <div class="carousel-dots">
+              \${c.carouselImages.map((_, i) => \`<button class="carousel-dot\${i === 0 ? ' active' : ''}" onclick="goToSlide(\${i})"></button>\`).join('')}
+            </div>
+          </div>\`
+        : (c.imageUrl ? \`<img src="\${c.imageUrl}" class="modal-image" alt="\${c.headline}">\` : '');
+
       content.innerHTML = \`
-        \${c.imageUrl ? \`<img src="\${c.imageUrl}" class="modal-image" alt="\${c.headline}">\` : ''}
+        \${carouselHtml}
         <div class="modal-body">
           <h2>\${c.headline || 'Creative ' + c.id}</h2>
           \${c.primaryText ? \`<div class="full-text">\${c.primaryText}</div>\` : ''}
@@ -1457,6 +1487,28 @@ function generateHTML(
       \`;
       modal.classList.add('active');
       document.body.style.overflow = 'hidden';
+      window._carouselSlide = 0;
+    }
+
+    // Carousel navigation
+    window._carouselSlide = 0;
+    function moveCarousel(dir) {
+      const track = document.getElementById('carouselTrack');
+      if (!track) return;
+      const total = track.children.length;
+      window._carouselSlide = Math.max(0, Math.min(total - 1, window._carouselSlide + dir));
+      updateCarousel();
+    }
+    function goToSlide(idx) {
+      window._carouselSlide = idx;
+      updateCarousel();
+    }
+    function updateCarousel() {
+      const track = document.getElementById('carouselTrack');
+      if (!track) return;
+      track.style.transform = 'translateX(-' + (window._carouselSlide * 100) + '%)';
+      const dots = document.querySelectorAll('.carousel-dot');
+      dots.forEach((d, i) => d.classList.toggle('active', i === window._carouselSlide));
     }
 
     function closeModal() {
@@ -1843,7 +1895,7 @@ function generateHTML(
 
       // Format classification (from campaign name + creative type)
       let format = c.type || 'IMAGE';
-      if (cn.includes('carousel') || (hasPipeNaming && parts[parts.length - 1].toLowerCase() === 'carousel')) format = 'Carousel';
+      if (format === 'CAROUSEL' || cn.includes('carousel') || (hasPipeNaming && parts[parts.length - 1].toLowerCase() === 'carousel')) format = 'Carousel';
       else if (format === 'VIDEO' || c.videoViews > 0) format = 'Video';
       else if (format === 'INMAIL' || format === 'TEXT') format = format.charAt(0) + format.slice(1).toLowerCase();
       else format = 'Single Image';
@@ -2088,6 +2140,12 @@ function generateHTML(
 
     // ==================== Initialize ====================
     initChart();
+    // Default to "SaaS | LinkedIn | T1–T2 Master" campaign group if it exists
+    const defaultGroup = campaignGroups.find(g => g.name === 'SaaS | LinkedIn | T1\u2013T2 Master');
+    if (defaultGroup) {
+      document.getElementById('groupFilter').value = defaultGroup.id;
+      filterByGroup(defaultGroup.id);
+    }
     renderConversions(filterState.selectedCampaignIds);
     renderDemographics(filterState.selectedCampaignIds);
   </script>

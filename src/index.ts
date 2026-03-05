@@ -49,6 +49,30 @@ import {
   handleComparePerformance,
   handleGetDailyTrends,
 } from './tools/analytics.js';
+import {
+  createCampaignGroupTool,
+  updateCampaignGroupTool,
+  deleteCampaignGroupTool,
+  createCampaignTool,
+  updateCampaignTool,
+  deleteCampaignTool,
+  updateCreativeStatusTool,
+  createCreativeTool,
+  handleCreateCampaignGroup,
+  handleUpdateCampaignGroup,
+  handleDeleteCampaignGroup,
+  handleCreateCampaign,
+  handleUpdateCampaign,
+  handleDeleteCampaign,
+  handleUpdateCreativeStatus,
+  handleCreateCreative,
+  createInlineAdTool,
+  handleCreateInlineAd,
+  listCampaignsTool,
+  handleListCampaigns,
+  uploadImageTool,
+  handleUploadImage,
+} from './tools/campaign-management.js';
 
 // All available tools
 const TOOLS: Tool[] = [
@@ -71,6 +95,18 @@ const TOOLS: Tool[] = [
   // Advanced Analytics
   comparePerformanceTool,
   getDailyTrendsTool,
+  // Campaign Management (Write)
+  createCampaignGroupTool,
+  updateCampaignGroupTool,
+  deleteCampaignGroupTool,
+  createCampaignTool,
+  updateCampaignTool,
+  deleteCampaignTool,
+  updateCreativeStatusTool,
+  createCreativeTool,
+  createInlineAdTool,
+  listCampaignsTool,
+  uploadImageTool,
 ];
 
 class LinkedInAdsMCPServer {
@@ -178,6 +214,41 @@ class LinkedInAdsMCPServer {
             break;
           case 'get_daily_trends':
             result = await handleGetDailyTrends(this.apiClient, args);
+            break;
+
+          // Campaign Management (Write)
+          case 'create_campaign_group':
+            result = await handleCreateCampaignGroup(this.apiClient, args);
+            break;
+          case 'update_campaign_group':
+            result = await handleUpdateCampaignGroup(this.apiClient, args);
+            break;
+          case 'delete_campaign_group':
+            result = await handleDeleteCampaignGroup(this.apiClient, args);
+            break;
+          case 'create_campaign':
+            result = await handleCreateCampaign(this.apiClient, args);
+            break;
+          case 'update_campaign':
+            result = await handleUpdateCampaign(this.apiClient, args);
+            break;
+          case 'delete_campaign':
+            result = await handleDeleteCampaign(this.apiClient, args);
+            break;
+          case 'update_creative_status':
+            result = await handleUpdateCreativeStatus(this.apiClient, args);
+            break;
+          case 'create_creative':
+            result = await handleCreateCreative(this.apiClient, args);
+            break;
+          case 'create_inline_ad':
+            result = await handleCreateInlineAd(this.apiClient, args);
+            break;
+          case 'list_campaigns':
+            result = await handleListCampaigns(this.apiClient, args);
+            break;
+          case 'upload_image':
+            result = await handleUploadImage(this.apiClient, args);
             break;
 
           default:
