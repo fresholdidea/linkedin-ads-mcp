@@ -64,7 +64,9 @@ interface RequestOptions {
   method?: 'GET' | 'POST' | 'PUT' | 'DELETE';
   body?: unknown;
   params?: Record<string, string | string[] | number | boolean | undefined>;
-  restliMethod?: 'FINDER' | 'BATCH_GET' | 'GET' | 'CREATE' | 'UPDATE' | 'DELETE';
+  restliMethod?: 'FINDER' | 'BATCH_GET' | 'GET' | 'CREATE' | 'UPDATE' | 'DELETE' | 'PARTIAL_UPDATE' | 'BATCH_PARTIAL_UPDATE' | 'BATCH_CREATE';
+  /** If true, return the full Response object instead of parsing JSON */
+  rawResponse?: boolean;
 }
 
 export class LinkedInApiClient {
@@ -153,6 +155,22 @@ export class LinkedInApiClient {
             errorData = { status: response.status, message: errorText };
           }
           throw new Error(`LinkedIn API error (${response.status}): ${errorData.message}`);
+        }
+
+        // Return raw response if requested (for write operations that need headers)
+        if (options.rawResponse) {
+          return response as unknown as T;
+        }
+
+        // Handle empty responses (201 Created, 204 No Content)
+        const contentLength = response.headers.get('content-length');
+        if (response.status === 204 || response.status === 201 || contentLength === '0') {
+          // Extract ID from x-restli-id header if present (for create operations)
+          const restliId = response.headers.get('x-restli-id');
+          if (restliId) {
+            return { id: restliId } as T;
+          }
+          return {} as T;
         }
 
         return await response.json() as T;
@@ -827,6 +845,311 @@ export class LinkedInApiClient {
     }
 
     return forms;
+  }
+
+  // ==================== Audiences ====================
+
+  // ==================== Campaign Group Management (Write) ====================
+
+  /**
+   * Creates a new campaign group.
+   */
+  async createCampaignGroup(accountId: string, data: {
+    name: string;
+    status: string;
+    runSchedule: { start: number; end?: number };
+    totalBudget?: { amount: string; currencyCode: string };
+    dailyBudget?: { amount: string; currencyCode: string };
+    objectiveType?: string;
+  }): Promise<{ id: string }> {
+    return this.request<{ id: string }>(`/rest/adAccounts/${accountId}/adCampaignGroups`, {
+      method: 'POST',
+      body: {
+        account: `urn:li:sponsoredAccount:${accountId}`,
+        ...data,
+      },
+    });
+  }
+
+  /**
+   * Partially updates a campaign group.
+   */
+  async updateCampaignGroup(accountId: string, campaignGroupId: string, updates: Record<string, unknown>): Promise<void> {
+    await this.request<void>(`/rest/adAccounts/${accountId}/adCampaignGroups/${campaignGroupId}`, {
+      method: 'POST',
+      restliMethod: 'PARTIAL_UPDATE',
+      body: {
+        patch: {
+          $set: updates,
+        },
+      },
+    });
+  }
+
+  /**
+   * Deletes a draft campaign group, or sets non-draft to PENDING_DELETION.
+   */
+  async deleteCampaignGroup(accountId: string, campaignGroupId: string, isDraft: boolean): Promise<void> {
+    if (isDraft) {
+      await this.request<void>(`/rest/adAccounts/${accountId}/adCampaignGroups/${campaignGroupId}`, {
+        method: 'DELETE',
+      });
+    } else {
+      await this.updateCampaignGroup(accountId, campaignGroupId, { status: 'PENDING_DELETION' });
+    }
+  }
+
+  // ==================== Campaign Management (Write) ====================
+
+  /**
+   * Creates a new campaign.
+   */
+  async createCampaign(accountId: string, data: {
+    name: string;
+    campaignGroup: string;
+    status: string;
+    type: string;
+    objectiveType: string;
+    costType: string;
+    dailyBudget?: { amount: string; currencyCode: string };
+    totalBudget?: { amount: string; currencyCode: string };
+    unitCost: { amount: string; currencyCode: string };
+    locale: { country: string; language: string };
+    targetingCriteria: unknown;
+    runSchedule?: { start: number; end?: number };
+    offsiteDeliveryEnabled?: boolean;
+    audienceExpansionEnabled?: boolean;
+    creativeSelection?: string;
+    politicalIntent?: string;
+  }): Promise<{ id: string }> {
+    const campaignGroupUrn = data.campaignGroup.startsWith('urn:') ? data.campaignGroup : `urn:li:sponsoredCampaignGroup:${data.campaignGroup}`;
+    const { campaignGroup: _cg, ...rest } = data;
+    return this.request<{ id: string }>(`/rest/adAccounts/${accountId}/adCampaigns`, {
+      method: 'POST',
+      body: {
+        account: `urn:li:sponsoredAccount:${accountId}`,
+        campaignGroup: campaignGroupUrn,
+        ...rest,
+      },
+    });
+  }
+
+  /**
+   * Partially updates a campaign.
+   */
+  async updateCampaign(accountId: string, campaignId: string, updates: Record<string, unknown>): Promise<void> {
+    await this.request<void>(`/rest/adAccounts/${accountId}/adCampaigns/${campaignId}`, {
+      method: 'POST',
+      restliMethod: 'PARTIAL_UPDATE',
+      body: {
+        patch: {
+          $set: updates,
+        },
+      },
+    });
+  }
+
+  /**
+   * Deletes a draft campaign, or sets non-draft to PENDING_DELETION.
+   */
+  async deleteCampaign(accountId: string, campaignId: string, isDraft: boolean): Promise<void> {
+    if (isDraft) {
+      await this.request<void>(`/rest/adAccounts/${accountId}/adCampaigns/${campaignId}`, {
+        method: 'DELETE',
+      });
+    } else {
+      await this.updateCampaign(accountId, campaignId, { status: 'PENDING_DELETION' });
+    }
+  }
+
+  // ==================== Creative Management (Write) ====================
+
+  /**
+   * Creates a new creative.
+   */
+  async createCreative(accountId: string, data: {
+    campaign: string;
+    content?: unknown;
+    intendedStatus: string;
+    inlineContent?: unknown;
+    leadgenCallToAction?: unknown;
+    name?: string;
+  }): Promise<{ id: string }> {
+    const body: Record<string, unknown> = {
+      campaign: data.campaign.startsWith('urn:') ? data.campaign : `urn:li:sponsoredCampaign:${data.campaign}`,
+      intendedStatus: data.intendedStatus,
+    };
+    if (data.content) body.content = data.content;
+    if (data.inlineContent) body.inlineContent = data.inlineContent;
+    if (data.leadgenCallToAction) body.leadgenCallToAction = data.leadgenCallToAction;
+    if (data.name) body.name = data.name;
+
+    return this.request<{ id: string }>(`/rest/adAccounts/${accountId}/creatives`, {
+      method: 'POST',
+      body,
+    });
+  }
+
+  /**
+   * Creates a new inline creative (ad with content created directly, not referencing an existing post).
+   * Uses the ?action=createInline endpoint.
+   */
+  async createInlineCreative(accountId: string, data: {
+    campaign: string;
+    intendedStatus: string;
+    name?: string;
+    organizationId: string;
+    commentary: string;
+    mediaId?: string;
+    mediaTitle?: string;
+    landingPageUrl?: string;
+    callToActionLabel?: string;
+    leadgenCallToAction?: { destination: string; label: string };
+  }): Promise<{ id: string }> {
+    const campaignUrn = data.campaign.startsWith('urn:') ? data.campaign : `urn:li:sponsoredCampaign:${data.campaign}`;
+    const orgUrn = data.organizationId.startsWith('urn:') ? data.organizationId : `urn:li:organization:${data.organizationId}`;
+
+    const post: Record<string, unknown> = {
+      adContext: {
+        dscAdAccount: `urn:li:sponsoredAccount:${accountId}`,
+        dscStatus: 'ACTIVE',
+      },
+      author: orgUrn,
+      commentary: data.commentary,
+      visibility: 'PUBLIC',
+      lifecycleState: 'PUBLISHED',
+      isReshareDisabledByAuthor: false,
+    };
+
+    if (data.mediaId) {
+      post.content = {
+        media: {
+          id: data.mediaId,
+          title: data.mediaTitle || '',
+        },
+      };
+    }
+
+    if (data.landingPageUrl) {
+      post.contentLandingPage = data.landingPageUrl;
+    }
+
+    if (data.callToActionLabel) {
+      post.contentCallToActionLabel = data.callToActionLabel;
+    }
+
+    const creative: Record<string, unknown> = {
+      inlineContent: { post },
+      campaign: campaignUrn,
+      intendedStatus: data.intendedStatus,
+    };
+
+    if (data.name) creative.name = data.name;
+    if (data.leadgenCallToAction) creative.leadgenCallToAction = data.leadgenCallToAction;
+
+    return this.request<{ id: string }>(`/rest/adAccounts/${accountId}/creatives?action=createInline`, {
+      method: 'POST',
+      body: { creative },
+    });
+  }
+
+  /**
+   * Uploads an image to LinkedIn for use in ads.
+   * Two-step process: 1) Initialize upload to get URL + URN, 2) PUT binary to upload URL.
+   */
+  async uploadImage(data: {
+    owner: string;
+    filePath: string;
+    accountId?: string;
+    assetName?: string;
+  }): Promise<{ imageUrn: string; uploadUrl: string }> {
+    // Support both organization and sponsoredAccount as owner
+    let ownerUrn: string;
+    if (data.owner.startsWith('urn:')) {
+      ownerUrn = data.owner;
+    } else {
+      // Default to organization URN, but callers can pass sponsoredAccount URN directly
+      ownerUrn = `urn:li:organization:${data.owner}`;
+    }
+
+    // Step 1: Initialize upload
+    const initBody: Record<string, unknown> = {
+      initializeUploadRequest: {
+        owner: ownerUrn,
+      },
+    };
+
+    // Optionally register in media library
+    if (data.accountId && data.assetName) {
+      (initBody.initializeUploadRequest as Record<string, unknown>).mediaLibraryMetadata = {
+        associatedAccount: `urn:li:sponsoredAccount:${data.accountId}`,
+        assetName: data.assetName,
+      };
+    }
+
+    const initResponse = await this.request<{
+      value: {
+        uploadUrl: string;
+        image: string;
+        uploadUrlExpiresAt: number;
+      };
+    }>('/rest/images?action=initializeUpload', {
+      method: 'POST',
+      body: initBody,
+    });
+
+    const { uploadUrl, image: imageUrn } = initResponse.value;
+
+    // Step 2: Upload the binary file
+    const fs = await import('fs');
+    const path = await import('path');
+
+    if (!fs.existsSync(data.filePath)) {
+      throw new Error(`File not found: ${data.filePath}`);
+    }
+
+    const fileBuffer = fs.readFileSync(data.filePath);
+    const ext = path.extname(data.filePath).toLowerCase();
+    const mimeTypes: Record<string, string> = {
+      '.png': 'image/png',
+      '.jpg': 'image/jpeg',
+      '.jpeg': 'image/jpeg',
+      '.gif': 'image/gif',
+    };
+    const contentType = mimeTypes[ext] || 'application/octet-stream';
+
+    const accessToken = await this.tokenStore.getAccessToken();
+    const uploadResponse = await fetch(uploadUrl, {
+      method: 'PUT',
+      headers: {
+        'Authorization': `Bearer ${accessToken}`,
+        'Content-Type': contentType,
+      },
+      body: fileBuffer,
+    });
+
+    if (!uploadResponse.ok) {
+      const errorText = await uploadResponse.text();
+      throw new Error(`Image upload failed (${uploadResponse.status}): ${errorText}`);
+    }
+
+    return { imageUrn, uploadUrl };
+  }
+
+  /**
+   * Partially updates a creative (e.g., status change).
+   */
+  async updateCreative(accountId: string, creativeId: string, updates: Record<string, unknown>): Promise<void> {
+    const encodedId = encodeURIComponent(creativeId.startsWith('urn:') ? creativeId : `urn:li:sponsoredCreative:${creativeId}`);
+    await this.request<void>(`/rest/adAccounts/${accountId}/creatives/${encodedId}`, {
+      method: 'POST',
+      restliMethod: 'PARTIAL_UPDATE',
+      body: {
+        patch: {
+          $set: updates,
+        },
+      },
+    });
   }
 
   // ==================== Audiences ====================
