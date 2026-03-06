@@ -220,7 +220,7 @@ export async function handleComparePerformance(
 
   // Calculate changes
   const changes: Record<string, { absolute: number; percentage: number | null }> = {};
-  const metricKeys = ['impressions', 'clicks', 'costInUsd', 'conversions'];
+  const metricKeys = ['impressions', 'clicks', 'costInUsd', 'conversions', 'averageDwellTime'];
 
   for (const key of metricKeys) {
     const valA = metricsA[key] || 0;
@@ -260,6 +260,10 @@ export async function handleComparePerformance(
     const direction = changes.costPerClick.percentage > 0 ? 'increased' : 'decreased';
     insights.push(`Cost per click ${direction} by ${Math.abs(changes.costPerClick.percentage).toFixed(1)}%`);
   }
+  if (changes.averageDwellTime?.percentage !== null && changes.averageDwellTime?.percentage !== undefined && Math.abs(changes.averageDwellTime.percentage) > 10) {
+    const direction = changes.averageDwellTime.percentage > 0 ? 'increased' : 'decreased';
+    insights.push(`Average dwell time ${direction} by ${Math.abs(changes.averageDwellTime.percentage).toFixed(1)}%`);
+  }
 
   return {
     comparisonType: input.comparisonType,
@@ -272,6 +276,7 @@ export async function handleComparePerformance(
         conversions: metricsA.conversions || 0,
         ctr: ctrA.toFixed(2),
         costPerClick: cpcA.toFixed(2),
+        averageDwellTime: metricsA.averageDwellTime || null,
       },
     },
     periodB: {
@@ -283,6 +288,7 @@ export async function handleComparePerformance(
         conversions: metricsB.conversions || 0,
         ctr: ctrB.toFixed(2),
         costPerClick: cpcB.toFixed(2),
+        averageDwellTime: metricsB.averageDwellTime || null,
       },
     },
     changes,
@@ -316,14 +322,14 @@ export async function handleGetDailyTrends(
   });
 
   // Group by date
-  const byDate = new Map<string, Record<string, number>>();
+  const byDate = new Map<string, Record<string, any>>();
 
   for (const record of analytics as any[]) {
     if (record.dateRange) {
       const date = `${record.dateRange.start.year}-${String(record.dateRange.start.month).padStart(2, '0')}-${String(record.dateRange.start.day).padStart(2, '0')}`;
 
       if (!byDate.has(date)) {
-        byDate.set(date, { impressions: 0, clicks: 0, costInUsd: 0, conversions: 0 });
+        byDate.set(date, { impressions: 0, clicks: 0, costInUsd: 0, conversions: 0, averageDwellTime: null, _dwellTimeCount: 0 });
       }
 
       const metrics = byDate.get(date)!;
@@ -331,6 +337,10 @@ export async function handleGetDailyTrends(
       metrics.clicks += record.clicks || 0;
       metrics.costInUsd += parseFloat(record.costInUsd) || 0;
       metrics.conversions += record.externalWebsiteConversions || 0;
+      if (record.averageDwellTime != null) {
+        metrics.averageDwellTime = ((metrics.averageDwellTime || 0) * metrics._dwellTimeCount + record.averageDwellTime) / (metrics._dwellTimeCount + 1);
+        metrics._dwellTimeCount += 1;
+      }
     }
   }
 
@@ -348,6 +358,9 @@ export async function handleGetDailyTrends(
           : 0,
         costPerConversion: metrics.conversions > 0
           ? Number((metrics.costInUsd / metrics.conversions).toFixed(2))
+          : null,
+        averageDwellTime: metrics.averageDwellTime != null
+          ? Number(Number(metrics.averageDwellTime).toFixed(1))
           : null,
       },
     }))
@@ -444,15 +457,29 @@ export async function handleGetDailyTrends(
 // Helper function to aggregate metrics from analytics records
 // Note: LinkedIn API returns metrics directly on the record (not nested under .metrics)
 function aggregateMetrics(records: any[]): Record<string, number> {
-  return records.reduce(
-    (acc, r) => ({
-      impressions: acc.impressions + (r.impressions || 0),
-      clicks: acc.clicks + (r.clicks || 0),
-      costInUsd: acc.costInUsd + (parseFloat(r.costInUsd) || 0),
-      conversions: acc.conversions + (r.externalWebsiteConversions || 0),
-    }),
+  let dwellTimeSum = 0;
+  let dwellTimeCount = 0;
+
+  const totals = records.reduce(
+    (acc, r) => {
+      if (r.averageDwellTime != null) {
+        dwellTimeSum += r.averageDwellTime;
+        dwellTimeCount += 1;
+      }
+      return {
+        impressions: acc.impressions + (r.impressions || 0),
+        clicks: acc.clicks + (r.clicks || 0),
+        costInUsd: acc.costInUsd + (parseFloat(r.costInUsd) || 0),
+        conversions: acc.conversions + (r.externalWebsiteConversions || 0),
+      };
+    },
     { impressions: 0, clicks: 0, costInUsd: 0, conversions: 0 }
   );
+
+  return {
+    ...totals,
+    averageDwellTime: dwellTimeCount > 0 ? dwellTimeSum / dwellTimeCount : 0,
+  };
 }
 
 // Helper to get default start date (30 days ago)

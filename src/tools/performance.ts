@@ -8,7 +8,7 @@ import {
 } from '../lib/types.js';
 
 // Standard metrics that should be included in all performance reports
-// Spend, Impressions, CTR, Clicks, Reach, Freq, Engagements, Engagement Rate, CPM, CPC, Conv, Conv%, Cost/Conv, Audience Penetration
+// Spend, Impressions, CTR, Clicks, Reach, Freq, Engagements, Engagement Rate, CPM, CPC, Conv, Conv%, Cost/Conv, Audience Penetration, Avg Dwell Time
 interface StandardMetrics {
   spend: number;
   impressions: number;
@@ -24,6 +24,7 @@ interface StandardMetrics {
   conversionRate: number | null;
   costPerConversion: number | null;
   audiencePenetration: number | null;
+  averageDwellTime: number | null;
 }
 
 // Helper to calculate standard metrics from a raw analytics record
@@ -34,6 +35,15 @@ function calculateStandardMetrics(record: any, estimatedAudienceSize?: number): 
   const conversions = record.externalWebsiteConversions || 0;
   const engagements = record.totalEngagements || 0;
   const reach = record.approximateUniqueImpressions || (impressions > 0 ? Math.round(impressions * 0.7) : 0);
+
+  // Use native audiencePenetration from API when available (ACCOUNT/CAMPAIGN_GROUP/CAMPAIGN pivots, ≤92 day range),
+  // otherwise fall back to client-side calculation if estimatedAudienceSize is provided
+  const nativeAudiencePenetration = record.audiencePenetration != null
+    ? Number(Number(record.audiencePenetration * 100).toFixed(2))
+    : null;
+  const fallbackAudiencePenetration = estimatedAudienceSize && estimatedAudienceSize > 0
+    ? Number(((reach / estimatedAudienceSize) * 100).toFixed(2))
+    : null;
 
   return {
     spend,
@@ -49,9 +59,8 @@ function calculateStandardMetrics(record: any, estimatedAudienceSize?: number): 
     conversions,
     conversionRate: clicks > 0 ? Number(((conversions / clicks) * 100).toFixed(2)) : null,
     costPerConversion: conversions > 0 ? Number((spend / conversions).toFixed(2)) : null,
-    audiencePenetration: estimatedAudienceSize && estimatedAudienceSize > 0
-      ? Number(((reach / estimatedAudienceSize) * 100).toFixed(2))
-      : null,
+    audiencePenetration: nativeAudiencePenetration ?? fallbackAudiencePenetration,
+    averageDwellTime: record.averageDwellTime != null ? Number(record.averageDwellTime) : null,
   };
 }
 
@@ -73,7 +82,7 @@ function calculateDerivedMetrics(record: any): Record<string, number | null> {
 // Tool definitions
 export const getCampaignPerformanceTool: Tool = {
   name: 'get_campaign_performance',
-  description: 'Retrieves performance metrics for campaigns within a specified date range. Returns key metrics like impressions, clicks, spend, CTR, and conversions. The primary tool for daily campaign monitoring and optimization decisions.',
+  description: 'Retrieves performance metrics for campaigns within a specified date range. Returns key metrics like impressions, clicks, spend, CTR, conversions, audience penetration, and average dwell time. The primary tool for daily campaign monitoring and optimization decisions.',
   inputSchema: {
     type: 'object',
     properties: {
@@ -111,7 +120,7 @@ export const getCampaignPerformanceTool: Tool = {
 
 export const getCreativePerformanceTool: Tool = {
   name: 'get_creative_performance',
-  description: 'Retrieves performance metrics for individual ad creatives. Shows which specific ads are performing best, including engagement metrics (likes, comments, shares) and video metrics. Essential for creative optimization.',
+  description: 'Retrieves performance metrics for individual ad creatives. Shows which specific ads are performing best, including engagement metrics (likes, comments, shares), video metrics, and average dwell time. Essential for creative optimization.',
   inputSchema: {
     type: 'object',
     properties: {

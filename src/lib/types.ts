@@ -119,6 +119,7 @@ export interface AnalyticsMetrics {
   approximateMemberReach?: number;
   approximateUniqueImpressions?: number;
   audiencePenetration?: number;
+  averageDwellTime?: number;
   conversionValueInLocalCurrency?: number;
 }
 

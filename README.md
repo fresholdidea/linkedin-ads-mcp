@@ -202,8 +202,8 @@ This MCP server connects Claude Desktop (or any MCP-compatible client) to the Li
 
 ## Features
 
-- **14 Specialized Tools** - Covering accounts, campaigns, creatives, audiences, conversions, and analytics
-- **Comprehensive Metrics** - Every report includes: Spend, Impressions, Clicks, CTR, Reach, Frequency, Engagements, Engagement Rate, CPM, CPC, Conversions, Conversion Rate, Cost per Conversion, and Audience Penetration
+- **25 Specialized Tools** - Covering accounts, campaigns, creatives, audiences, conversions, analytics, and full campaign management (create, update, delete)
+- **Comprehensive Metrics** - Every report includes: Spend, Impressions, Clicks, CTR, Reach, Frequency, Engagements, Engagement Rate, CPM, CPC, Conversions, Conversion Rate, Cost per Conversion, Audience Penetration, and Average Dwell Time
 - **Single OAuth Authentication** - Authenticate once and access all your LinkedIn ad accounts
 - **Automatic Token Refresh** - Tokens refresh automatically before expiration
 - **Rate Limit Handling** - Built-in exponential backoff for API rate limits
@@ -239,6 +239,7 @@ Before using this MCP server, you need to set up a LinkedIn Developer applicatio
 3. Verify these OAuth 2.0 scopes are available:
    - `r_ads` - Read ad accounts
    - `r_ads_reporting` - Read reporting data
+   - `rw_ads` - Create and manage campaigns, creatives, and ads
    - `r_organization_social` - Read organization posts (for creative content)
 
 ---
@@ -326,16 +327,17 @@ After updating the config, restart Claude Desktop for the changes to take effect
 
 | Tool | Description |
 |------|-------------|
-| `get_campaign_performance` | Campaign metrics with all standard KPIs |
-| `get_creative_performance` | Ad-level metrics with engagement and video stats |
+| `get_campaign_performance` | Campaign metrics with all standard KPIs including audience penetration and average dwell time |
+| `get_creative_performance` | Ad-level metrics with engagement, video stats, and average dwell time |
 | `get_campaign_groups` | List campaign groups with aggregated performance |
+| `list_campaigns` | List all campaigns including drafts and paused with zero impressions |
 
 ### Audience & Demographics
 
 | Tool | Description |
 |------|-------------|
 | `get_audience_demographics` | Performance by job function, industry, seniority, company size, country, region |
-| `get_audience_reach` | Unique member reach and frequency metrics |
+| `get_audience_reach` | Unique member reach, frequency, and native audience penetration metrics |
 | `list_saved_audiences` | View matched and lookalike audiences |
 
 ### Conversions & Lead Generation
@@ -353,6 +355,21 @@ After updating the config, restart Claude Desktop for the changes to take effect
 |------|-------------|
 | `compare_performance` | Compare metrics between time periods or entities |
 | `get_daily_trends` | Daily time-series data for trend analysis |
+
+### Campaign Management (Write Operations)
+
+| Tool | Description |
+|------|-------------|
+| `create_campaign_group` | Create a new campaign group for organizing campaigns |
+| `update_campaign_group` | Update campaign group status, budget, name, or end date |
+| `delete_campaign_group` | Delete a campaign group |
+| `create_campaign` | Create a new campaign with targeting, budget, and objective |
+| `update_campaign` | Update campaign status, budget, targeting, or bid amount |
+| `delete_campaign` | Delete a campaign |
+| `create_creative` | Create a creative from an existing post/share |
+| `create_inline_ad` | Create an ad with inline content (text, image, CTA) in one call |
+| `update_creative_status` | Activate, pause, or archive a creative |
+| `upload_image` | Upload an image for use in ads (PNG, JPG, GIF) |
 
 ---
 
@@ -375,7 +392,8 @@ Every performance report includes these metrics:
 | **Conversions** | Total conversion events |
 | **Conversion Rate** | Conversions / Clicks (%) |
 | **Cost per Conversion** | Spend / Conversions |
-| **Audience Penetration** | Reach / Estimated audience size (%) |
+| **Audience Penetration** | Native LinkedIn metric: unique members reached / total target audience size (%). Uses API-native value when available (≤92 day range), with client-side fallback |
+| **Average Dwell Time** | Average seconds users spent with >50% of ad pixels visible in viewport |
 
 ---
 
@@ -416,7 +434,8 @@ linkedin-ads-mcp/
 │       ├── performance.ts    # Campaign & creative performance
 │       ├── demographics.ts   # Audience demographics tools
 │       ├── conversions.ts    # Conversion & lead gen tools
-│       └── analytics.ts      # Advanced analytics tools
+│       ├── analytics.ts      # Advanced analytics tools
+│       └── campaign-management.ts  # Campaign CRUD & image upload tools
 ├── dist/                     # Compiled JavaScript output
 ├── package.json
 ├── tsconfig.json

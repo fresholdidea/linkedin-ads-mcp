@@ -29,6 +29,8 @@ const DEFAULT_PERFORMANCE_METRICS = [
   'costInLocalCurrency',
   'externalWebsiteConversions',
   'approximateUniqueImpressions',
+  'averageDwellTime',
+  'audiencePenetration',
 ];
 
 const DEFAULT_CREATIVE_METRICS = [
@@ -58,6 +60,7 @@ const LEAD_GEN_METRICS = [
 const REACH_METRICS = [
   'approximateMemberReach',
   'impressions',
+  'audiencePenetration',
 ];
 
 interface RequestOptions {
@@ -680,7 +683,9 @@ export class LinkedInApiClient {
     timeGranularity?: TimeGranularity;
     includeVideoMetrics?: boolean;
   }): Promise<AnalyticsRecord[]> {
-    let metrics = [...DEFAULT_CREATIVE_METRICS];
+    // Remove audiencePenetration (unsupported for CREATIVE pivot) and costInLocalCurrency
+    // (redundant with costInUsd) to stay under LinkedIn's 20-field API limit
+    let metrics = DEFAULT_CREATIVE_METRICS.filter(m => m !== 'audiencePenetration' && m !== 'costInLocalCurrency');
     if (options.includeVideoMetrics !== false) {
       metrics = [...metrics, ...VIDEO_METRICS];
     }
